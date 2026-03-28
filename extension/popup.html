@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>AI Page Assistant</title>
+    <link rel="stylesheet" href="popup.css" />
+    <link rel="stylesheet" href="vendor/github-dark.min.css" />
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        width: 400px;
+        height: 600px;
+        overflow: hidden;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      }
+      #auth-view {
+        padding: 20px;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", sans-serif;
+      }
+      #auth-view h1 {
+        font-size: 18px;
+        margin: 0 0 16px;
+        background: linear-gradient(135deg, #4f46e5, #ec4899);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+      #auth-view #status {
+        padding: 8px;
+        border-radius: 6px;
+        margin-bottom: 16px;
+        font-size: 12px;
+      }
+      .btn-google {
+        width: 100%;
+        padding: 12px;
+        border-radius: 10px;
+        border: 1px solid #e2e8f0;
+        background: #fff;
+        color: #1e293b;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        margin-bottom: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+      }
+      .btn-google:hover {
+        background: #f8fafc;
+      }
+      .auth-divider {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin: 18px 0;
+        color: #94a3b8;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+      .auth-divider::before,
+      .auth-divider::after {
+        content: "";
+        flex: 1;
+        height: 1px;
+        background: #e2e8f0;
+      }
+      .btn-guest {
+        width: 100%;
+        padding: 12px;
+        border-radius: 10px;
+        border: 1px dashed #cbd5e1;
+        background: #f8fafc;
+        color: #475569;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+      }
+      .btn-guest:hover {
+        background: #f1f5f9;
+        border-color: #94a3b8;
+      }
+      .guest-hint {
+        font-size: 11px;
+        color: #94a3b8;
+        margin: 12px 0 20px;
+        line-height: 1.4;
+      }
+      #auth-view input {
+        width: 100%;
+        padding: 8px;
+        margin-bottom: 8px;
+        border-radius: 8px;
+        border: 1px solid #cbd5f5;
+        box-sizing: border-box;
+      }
+      #auth-view .row {
+        display: flex;
+        gap: 8px;
+      }
+      #auth-view .row > button {
+        flex: 1;
+      }
+      #auth-view button.secondary {
+        background: #0f172a;
+        color: #e5e7eb;
+        padding: 10px;
+        border-radius: 8px;
+        border: none;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 500;
+      }
+      #auth-view button.primary {
+        background: linear-gradient(135deg, #4f46e5, #ec4899);
+        color: white;
+        padding: 10px;
+        border-radius: 8px;
+        border: none;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 500;
+      }
+      details.email-auth {
+        margin-top: 8px;
+        font-size: 12px;
+        color: #64748b;
+      }
+      details.email-auth summary {
+        cursor: pointer;
+        padding: 8px 0;
+      }
+      #chat-view {
+        width: 100%;
+        height: 100%;
+        display: none;
+      }
+      #chat-view.active {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="auth-view">
+      <h1>AI Page Assistant</h1>
+      <div id="status"></div>
+
+      <button id="google" type="button" class="btn-google" title="Sign in with Google">
+        <span>Continue with Google</span>
+      </button>
+
+      <div class="auth-divider"><span>or</span></div>
+
+      <button id="guest" type="button" class="btn-guest">Continue as Guest</button>
+      <p class="guest-hint">Guest mode uses a temporary session. Sign in with Google to sync across devices.</p>
+
+      <details class="email-auth">
+        <summary>Email sign in</summary>
+        <div style="margin-top: 10px;">
+          <input id="name" placeholder="Name (register only)" />
+          <input id="email" placeholder="Email" type="email" />
+          <input id="password" placeholder="Password" type="password" />
+          <div class="row">
+            <button id="register" type="button" class="secondary">Register</button>
+            <button id="login" type="button" class="primary">Login</button>
+          </div>
+        </div>
+      </details>
+
+      <button id="logout" type="button" style="display: none;">Logout</button>
+    </div>
+
+    <div id="chat-view" class="ai-assistant-root">
+      <div id="root"></div>
+    </div>
+
+    <script src="vendor/highlight.min.js"></script>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>
