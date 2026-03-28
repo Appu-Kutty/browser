@@ -1,10 +1,10 @@
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { GoogleGenAI } = require('@google/genai');
 const { cleanPageContent } = require('../utils/text');
 const translation = require('./translationService');
 
-/** Stable model id (avoid deprecated *-latest aliases that 404). */
+/** Default model for Gemini API (@google/genai uses current REST surface). */
 function resolveGeminiModel(envValue) {
-  const fallback = 'gemini-1.5-flash';
+  const fallback = 'gemini-2.5-flash';
   const raw = (envValue || fallback).trim();
   const id = raw.replace(/^models\//, '');
   if (id === 'gemini-1.5-flash-latest') return fallback;
@@ -24,23 +24,26 @@ const MIN_SELECTION = 12;
 let genAISingleton = null;
 
 function getGenAI() {
-  if (!process.env.GEMINI_API_KEY) {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key || !String(key).trim()) {
     const err = new Error('GEMINI_API_KEY not set');
     err.status = 503;
     throw err;
   }
   if (!genAISingleton) {
-    genAISingleton = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    genAISingleton = new GoogleGenAI({ apiKey: String(key).trim() });
   }
   return genAISingleton;
 }
 
-function getGenerativeModel(modelInput) {
-  const genAI = getGenAI();
-  return genAI.getGenerativeModel({
+function buildGenerateParams(modelInput) {
+  return {
     model: GEMINI_MODEL,
-    systemInstruction: modelInput.systemInstruction
-  });
+    contents: modelInput.userText,
+    config: {
+      systemInstruction: modelInput.systemInstruction
+    }
+  };
 }
 
 function decideSource(clean, selectionText) {
@@ -123,10 +126,9 @@ async function prepareAsk({ pageContent, question, language, url, domain, select
 }
 
 async function runModelText(modelInput) {
-  const model = getGenerativeModel(modelInput);
-  const result = await model.generateContent(modelInput.userText);
-  const response = result.response;
-  const text = (typeof response.text === 'function' ? response.text() : response.text || '').trim();
+  const ai = getGenAI();
+  const response = await ai.models.generateContent(buildGenerateParams(modelInput));
+  const text = (response.text || '').trim();
   if (!text) {
     throw new Error('Gemini returned an empty response');
   }
@@ -164,11 +166,11 @@ async function* streamTokens(modelInput) {
     return;
   }
 
-  const model = getGenerativeModel(modelInput);
-  const streamResult = await model.generateContentStream(modelInput.userText);
+  const ai = getGenAI();
+  const stream = await ai.models.generateContentStream(buildGenerateParams(modelInput));
 
-  for await (const chunk of streamResult.stream) {
-    const t = typeof chunk.text === 'function' ? chunk.text() : chunk.text || '';
+  for await (const chunk of stream) {
+    const t = chunk.text || '';
     if (t) yield t;
   }
 }
