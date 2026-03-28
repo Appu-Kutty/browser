@@ -42,6 +42,7 @@
         "authApi.js",
         "chatApi.js",
         "apiConfig.js",
+        "speechRecognition.js",
         "vendor/*",
         "node_modules/marked/lib/marked.esm.js",
         "node_modules/dompurify/dist/purify.es.mjs",

@@ -1,4 +1,9 @@
 import { LANGUAGES, t, speechLangCode } from './i18n.js';
+import {
+  abortVoiceInput,
+  isVoiceInputActive,
+  startVoiceInput
+} from './speechRecognition.js';
 import { connectChatStream } from './streamClient.js';
 import { getAuthHeaders, AUTH_KEYS } from './authApi.js';
 import { BASE_URL } from './apiConfig.js';
@@ -848,43 +853,26 @@ function exportChatDownload() {
 }
 
 function onMicClick() {
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition) {
-    alert('Speech recognition is not supported in this browser. Please use Chrome.');
+  if (isVoiceInputActive()) {
+    abortVoiceInput();
     return;
   }
-
-  try {
-    const rec = new SpeechRecognition();
-    rec.lang = speechLangCode(state.language);
-    rec.interimResults = false;
-    rec.maxAlternatives = 1;
-    rec.continuous = false;
-
-    rec.onresult = (e) => {
-      if (e.results && e.results.length > 0 && e.results[0].length > 0) {
-        const transcript = e.results[0][0].transcript;
-        if (textareaEl) {
-          textareaEl.value = transcript;
-          textareaEl.focus();
-        }
-      }
-    };
-
-    rec.onerror = (e) => {
-      console.error('Speech recognition error:', e.error);
-      if (e.error === 'not-allowed') {
-        alert('Microphone permission denied. Please allow microphone access.');
-      }
-    };
-
-    rec.onend = () => {};
-
-    rec.start();
-  } catch (e) {
-    console.error('Failed to start speech recognition:', e);
-    alert('Failed to start voice input. Please check microphone permissions.');
-  }
+  startVoiceInput({
+    lang: speechLangCode(state.language),
+    inputEl: textareaEl,
+    onListeningChange: (on) => {
+      micBtnEl?.classList.toggle('ai-mic--listening', on);
+      micBtnEl?.setAttribute('aria-pressed', on ? 'true' : 'false');
+    },
+    notifyUser: (msg) => {
+      console.error('[voice]', msg);
+      alert(msg);
+    },
+    onAutoSend: async () => {
+      if (state.isStreaming) return;
+      await onSend();
+    }
+  });
 }
 
 function speak(text) {

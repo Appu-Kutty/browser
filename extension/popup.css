@@ -508,6 +508,18 @@
   background: var(--popup-input-bg);
 }
 
+.ai-icon-btn--mic.ai-mic--listening {
+  color: var(--popup-accent, #6366f1);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.45);
+  animation: ai-mic-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes ai-mic-pulse {
+  50% {
+    opacity: 0.88;
+  }
+}
+
 .ai-icon-btn--send {
   background: var(--popup-accent);
   color: #fff;

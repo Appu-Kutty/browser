@@ -282,3 +282,15 @@
     background: rgba(148, 163, 184, 0.6);
     border-radius: 999px;
   }
+
+  /* Voice input — listening */
+  .ai-action-btn.ai-mic--listening {
+    box-shadow: 0 0 0 2px rgba(129, 140, 248, 0.75);
+    animation: ai-mic-pulse-sidebar 1.1s ease-in-out infinite;
+  }
+
+  @keyframes ai-mic-pulse-sidebar {
+    50% {
+      opacity: 0.88;
+    }
+  }
