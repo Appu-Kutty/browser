@@ -39,6 +39,32 @@
       return parts.join(' ');
     }
 
+    // --- Collect anchor tags (visible text + absolute href) for smart navigation ---
+    function extractPageLinks() {
+      const anchors = document.querySelectorAll('a[href]');
+      const seen = new Set();
+      const links = [];
+      for (const a of anchors) {
+        const raw = a.getAttribute('href');
+        if (!raw || raw.startsWith('javascript:') || raw === '#') continue;
+        let href;
+        try {
+          href = new URL(raw, window.location.href).href;
+        } catch {
+          continue;
+        }
+        const fromText = (a.textContent || '').replace(/\s+/g, ' ').trim();
+        const fromAria = (a.getAttribute('aria-label') || '').trim();
+        const fromTitle = (a.getAttribute('title') || '').trim();
+        const text = fromText || fromAria || fromTitle;
+        const key = `${href}\0${text}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        links.push({ text, href });
+      }
+      return links;
+    }
+
     // --- Highlight answer text on the page (best-effort) ---
     function highlightAnswer(snippet) {
       if (!snippet || !snippet.trim()) return;
@@ -71,6 +97,14 @@
         } catch (e) {
           console.error('Error extracting page content', e);
           sendResponse({ error: 'Failed to read page' });
+        }
+      } else if (msg.type === 'GET_PAGE_LINKS') {
+        try {
+          const links = extractPageLinks();
+          sendResponse({ links });
+        } catch (e) {
+          console.error('Error extracting page links', e);
+          sendResponse({ error: 'Failed to read links', links: [] });
         }
       } else if (msg.type === 'GET_SELECTION') {
         try {

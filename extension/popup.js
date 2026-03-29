@@ -528,7 +528,9 @@ function renderMessages() {
               ? ' · general'
               : msg.source === 'error'
                 ? ' · error'
-                : '';
+                : msg.source === 'navigation'
+                  ? ' · link'
+                  : '';
         controls.appendChild(src);
       }
       const copyBtn = document.createElement('button');
@@ -625,6 +627,140 @@ async function getPageContent(tabId, tabUrl) {
   }
 }
 
+const NAV_INTENT_RE =
+  /\b(open|go\s+to|navigate\s+to|visit|take\s+me\s+to|show\s+me)\b/i;
+
+function hasNavigationIntent(text) {
+  return NAV_INTENT_RE.test(text);
+}
+
+function extractNavigationNeedle(text) {
+  let s = text.trim();
+  s = s.replace(/^\s*please\s+[,]?\s*/i, '');
+  s = s.replace(/\b(open|go\s+to|navigate\s+to|visit|take\s+me\s+to|show\s+me)\b/gi, ' ');
+  s = s.replace(/\bthe\s+/gi, ' ');
+  s = s.replace(/\s+page\s*$/i, '');
+  s = s.replace(/\s+/g, ' ').trim();
+  return s.toLowerCase();
+}
+
+function normalizeLinkText(s) {
+  return String(s || '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function findMatchingLink(links, needle) {
+  const n = normalizeLinkText(needle);
+  if (!n) return null;
+  for (const link of links) {
+    const href = link.href || '';
+    if (!href || href.startsWith('javascript:')) continue;
+    const t = normalizeLinkText(link.text);
+    if (!t) continue;
+    if (t.includes(n) || n.includes(t)) return link;
+  }
+  const words = n.split(/\s+/).filter((w) => w.length > 1);
+  for (const link of links) {
+    const href = link.href || '';
+    if (!href || href.startsWith('javascript:')) continue;
+    const t = normalizeLinkText(link.text);
+    if (!t) continue;
+    if (words.length && words.every((w) => t.includes(w))) return link;
+  }
+  return null;
+}
+
+async function getPageLinks(tabId, tabUrl) {
+  const url = tabUrl || '';
+  const isInjectable = url.startsWith('http://') || url.startsWith('https://');
+  if (!isInjectable) {
+    return { links: [] };
+  }
+
+  const fromContent = await new Promise((resolve) => {
+    chrome.tabs.sendMessage(tabId, { type: 'GET_PAGE_LINKS' }, (res) => {
+      if (chrome.runtime.lastError) resolve(null);
+      else resolve(res);
+    });
+  });
+
+  if (fromContent && Array.isArray(fromContent.links) && !fromContent.error) {
+    return { links: fromContent.links };
+  }
+
+  try {
+    const results = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => {
+        const anchors = document.querySelectorAll('a[href]');
+        const seen = new Set();
+        const links = [];
+        for (const a of anchors) {
+          const raw = a.getAttribute('href');
+          if (!raw || raw.startsWith('javascript:') || raw === '#') continue;
+          let href;
+          try {
+            href = new URL(raw, window.location.href).href;
+          } catch {
+            continue;
+          }
+          const fromText = (a.textContent || '').replace(/\s+/g, ' ').trim();
+          const fromAria = (a.getAttribute('aria-label') || '').trim();
+          const fromTitle = (a.getAttribute('title') || '').trim();
+          const text = fromText || fromAria || fromTitle;
+          const key = `${href}\0${text}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          links.push({ text, href });
+        }
+        return links;
+      }
+    });
+    if (results && results[0] && results[0].result) {
+      return { links: results[0].result };
+    }
+  } catch (e) {
+    console.error('[getPageLinks] fallback failed', e);
+  }
+  return { links: [] };
+}
+
+/**
+ * Handles open/go to/navigate-style messages using page links only (no AI).
+ * @returns {Promise<boolean>} true if this message was handled (navigation path)
+ */
+async function trySmartNavigation(text, tabId, tabUrl) {
+  if (!hasNavigationIntent(text)) return false;
+
+  const { links } = await getPageLinks(tabId, tabUrl);
+  const needle = extractNavigationNeedle(text);
+  const matched = findMatchingLink(links, needle);
+
+  state.lastQuestion = text;
+  if (textareaEl) textareaEl.value = '';
+  state.messages.push({ role: 'user', content: text });
+  renderMessages();
+
+  if (matched && matched.href) {
+    chrome.tabs.create({ url: matched.href });
+    state.messages.push({
+      role: 'assistant',
+      content: 'Opened link in a new tab.',
+      source: 'navigation'
+    });
+  } else {
+    state.messages.push({
+      role: 'assistant',
+      content: 'Link not found',
+      source: 'navigation'
+    });
+  }
+  renderMessages();
+  return true;
+}
+
 function tabFallbackPage(tab) {
   let domain = 'unknown';
   try {
@@ -664,12 +800,6 @@ async function runChat(question, { skipUserPush = false } = {}) {
   const text = question.trim();
   if (!text || state.isStreaming) return;
 
-  const authHeaders = await getAuthHeaders();
-  if (!authHeaders.Authorization && !authHeaders['X-Guest-Session']) {
-    setStatus('Please sign in or continue as guest.', true);
-    return;
-  }
-
   activeStreamCancel?.();
   activeStreamCancel = null;
 
@@ -689,6 +819,17 @@ async function runChat(question, { skipUserPush = false } = {}) {
       });
       renderMessages();
       if (!skipUserPush) textareaEl.value = '';
+      return;
+    }
+
+    if (!skipUserPush) {
+      const navHandled = await trySmartNavigation(text, tabs[0].id, tabs[0].url);
+      if (navHandled) return;
+    }
+
+    const authHeaders = await getAuthHeaders();
+    if (!authHeaders.Authorization && !authHeaders['X-Guest-Session']) {
+      setStatus('Please sign in or continue as guest.', true);
       return;
     }
 
